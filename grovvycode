@@ -1,0 +1,78 @@
+job('task6-job1') {
+    description('This is job1')
+        scm {
+                 github('kingslayer227/DevOps_Task-6.git','master')
+     }
+     steps {
+                 shell("cp * -vrf /root/t111")
+          }
+          triggers {
+                   scm('* * * * *')
+                   }
+           triggers {
+                              upstream('Admin Job (Seed)', 'SUCCESS')
+                              }
+}
+
+
+job('task6-job2') {
+     description('This is job2')
+          scm {
+                  github('kingslayer227/DevOps_Task-6.git','master')
+                  }
+          triggers {
+                           upstream('task6-job1','SUCCESS')
+                           }
+          steps {
+                  shell('''
+                          if ls /root/t111 | grep html
+                          then 
+                                 if kubectl get deployment --selector "app in (https)" | grep httpd-web
+                                 then 
+                                         kubectl apply -f code.yml
+                                  else 
+                                         kubectl create -f code.yml
+                                  fi
+                                  POD=$(kubectl get pod -l app=httpd -o jsonpath="{.items[0].metadata.nam}")
+                                  kubectl cp /root/t111/index.html $(POD):/var/www/html
+                           fi
+                           ''')
+                 }
+}
+
+job('task6-job3') {
+    description('This is job3')
+        triggers {
+                        upstream('task-6-job2', 'SUCCESS')
+                        }
+   steps {
+       shell('''
+               status=$(curl -o /dev/null -s -w "%{http_code}" http://192.168.43.187:9001)
+               if [[ $status == 200 ]]
+               then
+                      exit 0
+               else 
+                      exit 1
+               fi
+               ''')
+                       }
+    publishers {
+         extendedEmail {
+              recipientList('<Add Email>')
+              defaultSubject('Job status')
+                 attachBuildLog(attachBuildLog = true)
+              defaultContent('Status Report')
+              contentType('text/html')
+              triggers {
+                 always {
+                    subject('build Status')
+                    content('Body')
+                    sendTo {
+                        developers()
+                        recipientList()
+                    }
+                 }
+              }
+         }
+    }
+}
